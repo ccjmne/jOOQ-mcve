@@ -10,10 +10,10 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <org.jooq.version>3.11.7</org.jooq.version>
-        <db.url>jdbc:h2:~/mcve</db.url>
-        <db.username>sa</db.username>
-        <db.password></db.password>
+        <org.jooq.version>3.11.9</org.jooq.version>
+        <db.url>jdbc:postgresql://localhost:5433/jooq-test</db.url>
+        <db.username>postgres</db.username>
+        <db.password>postgrespwd</db.password>
     </properties>
 
     <dependencies>
@@ -25,11 +25,17 @@
             <version>${org.jooq.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <version>1.4.197</version>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.2.5</version>
         </dependency>
 
+        <!-- JSON -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.9.8</version>
+        </dependency>
         <!-- Logging -->
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
@@ -53,8 +59,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.0</version>
                 <configuration>
-                    <source>10</source>
-                    <target>10</target>
+                    <source>1.8</source>
+                    <target>1.8</target>
                 </configuration>
             </plugin>
 
@@ -95,6 +101,7 @@
 
                         <configuration>
                             <jdbc>
+                                <driver>org.postgresql.Driver</driver>
                                 <url>${db.url}</url>
                                 <user>${db.username}</user>
                                 <password>${db.password}</password>
@@ -103,6 +110,13 @@
                                 <database>
                                     <includes>.*</includes>
                                     <inputSchema>mcve</inputSchema>
+                                    <forcedTypes>
+                                        <forcedType>
+                                            <userType>com.fasterxml.jackson.databind.JsonNode</userType>
+                                            <binding>org.jooq.mcve.jsonbinding.JsonBinder</binding>
+                                            <types>JSONB?</types>
+                                        </forcedType>
+                                    </forcedTypes>
                                 </database>
                                 <generate>
                                     <generatedAnnotation>false</generatedAnnotation>

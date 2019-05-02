@@ -1,4 +1,4 @@
-/*
+/*-
  * This work is dual-licensed
  * - under the Apache Software License 2.0 (the "ASL")
  * - under the jOOQ License and Maintenance Agreement (the "jOOQ License")
@@ -38,47 +38,107 @@
 package org.jooq.mcve.test;
 
 import static org.jooq.mcve.Tables.TEST;
-import static org.junit.Assert.assertEquals;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 
 import org.jooq.DSLContext;
+import org.jooq.DataType;
+import org.jooq.Field;
 import org.jooq.impl.DSL;
+import org.jooq.impl.SQLDataType;
+import org.jooq.mcve.jsonbinding.PostgresJSONJacksonJsonNodeConverter;
 import org.jooq.mcve.tables.records.TestRecord;
-
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 public class MCVETest {
 
-    Connection connection;
-    DSLContext ctx;
+  public static final DataType<JsonNode> JSON_TYPE     = SQLDataType.VARCHAR.asConvertedDataType(new PostgresJSONJacksonJsonNodeConverter());
+  private static final ObjectMapper      OBJECT_MAPPER = new ObjectMapper();
 
-    @Before
-    public void setup() throws Exception {
-        connection = DriverManager.getConnection("jdbc:h2:~/mcve", "sa", "");
-        ctx = DSL.using(connection);
-    }
+  private Connection connection;
+  private DSLContext ctx;
 
-    @After
-    public void after() throws Exception {
-        ctx = null;
-        connection.close();
-        connection = null;
-    }
+  @Before
+  public void setup() throws Exception {
+    this.connection = DriverManager.getConnection("jdbc:postgresql://localhost:5433/jooq-test", "postgres", "postgrespwd");
+    this.ctx = DSL.using(this.connection);
+    this.ctx.truncate(TEST).restartIdentity().execute();
+  }
 
-    @Test
-    public void mcveTest() {
-        TestRecord result =
-        ctx.insertInto(TEST)
-           .columns(TEST.VALUE)
-           .values(42)
-           .returning(TEST.ID)
-           .fetchOne();
+  @After
+  public void after() throws Exception {
+    this.ctx = null;
+    this.connection.close();
+    this.connection = null;
+  }
 
-        result.refresh();
-        assertEquals(42, (int) result.getValue());
-    }
+  @Test
+  public void mcveTest() throws IOException {
+    this.ctx.insertInto(TEST).columns(TEST.ID, TEST.VALUE).values(Integer.valueOf(1), OBJECT_MAPPER.readTree("\n" +
+        "{\n" +
+        "  \"age\": 35,\n" +
+        "  \"eyeColor\": \"brown\",\n" +
+        "  \"name\": {\n" +
+        "    \"first\": \"Alice\",\n" +
+        "    \"last\": \"Smith\"\n" +
+        "  }\n" +
+        "}\n")).execute();
+
+    // assertions OK
+    final TestRecord record = this.ctx.selectFrom(TEST).where(TEST.ID.eq(Integer.valueOf(1))).fetchOne();
+    Assert.assertEquals(35, record.get(TEST.VALUE).get("age").asInt());
+    Assert.assertEquals("Alice", record.get(TEST.VALUE).get("name").get("first").asText());
+
+    this.ctx.update(TEST).set(TEST.VALUE, OBJECT_MAPPER.readTree("\n" +
+        "{\n" +
+        "  \"age\": 35,\n" +
+        "  \"name\": {\n" +
+        "    \"first\": \"Bob\",\n" +
+        "    \"last\": \"Smith\"\n" +
+        "  }\n" +
+        "}\n")).where(TEST.ID.eq(Integer.valueOf(1))).execute();
+
+    // assertion OK
+    record.refresh();
+    Assert.assertEquals("Bob", record.get(TEST.VALUE).get("name").get("first").asText());
+
+    // FAILS TO EXECUTE
+
+    /*-
+     * UPDATE test
+     *     SET test.value = jsonb_set(test.value, '{name}', '{"first": "Christian", "last": "Smith"}')
+     *     WHERE test.id = 1
+     */
+    this.ctx.update(TEST).set(TEST.VALUE, MCVETest.setByKey(TEST.VALUE, "name", OBJECT_MAPPER.readTree("\n" +
+        "{\n" +
+        "    \"first\": \"Christian\",\n" +
+        "    \"last\": \"Smith\"\n" +
+        "}\n"))).where(TEST.ID.eq(Integer.valueOf(1))).execute();
+
+    record.refresh();
+    Assert.assertEquals("Christian", record.get(TEST.VALUE).get("name").get("first").asText());
+  }
+
+  /**
+   * Set JSON object value at key (function: {@code jsonb_set}).
+   *
+   * @param field
+   *          The JSON field to be updated
+   * @param key
+   *          The key to be assigned the specified {@code value}
+   * @param value
+   *          The value to set for the given {@code key}
+   * @return A new {@code Field<JsonNode>} with the updated key-value pair
+   */
+  public static Field<JsonNode> setByKey(final Field<JsonNode> field, final String key, final JsonNode value) {
+    return DSL.field("jsonb_set({0}, {1}, {2})", JsonNode.class, field, DSL.array(key), value);
+  }
 }

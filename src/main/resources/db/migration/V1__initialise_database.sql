@@ -2,9 +2,13 @@ DROP SCHEMA IF EXISTS mcve CASCADE;
 
 CREATE SCHEMA mcve;
 
-CREATE TABLE mcve.test (
-  id    INT NOT NULL AUTO_INCREMENT,
-  value INT,
-  
-  CONSTRAINT pk_test PRIMARY KEY (id) 
-);
+CREATE TABLE mcve.test
+(
+   id serial NOT NULL,
+   value jsonb NOT NULL DEFAULT '{}'::jsonb,
+   CONSTRAINT test_pk PRIMARY KEY (id)
+)
+WITH (
+  OIDS = FALSE
+)
+;
