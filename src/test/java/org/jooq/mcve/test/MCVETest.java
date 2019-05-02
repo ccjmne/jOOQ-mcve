@@ -110,8 +110,6 @@ public class MCVETest {
     record.refresh();
     Assert.assertEquals("Bob", record.get(TEST.VALUE).get("name").get("first").asText());
 
-    // FAILS TO EXECUTE
-
     /*-
      * UPDATE test
      *     SET test.value = jsonb_set(test.value, '{name}', '{"first": "Christian", "last": "Smith"}')
@@ -123,6 +121,7 @@ public class MCVETest {
         "    \"last\": \"Smith\"\n" +
         "}\n"))).where(TEST.ID.eq(Integer.valueOf(1))).execute();
 
+    // assertion OK
     record.refresh();
     Assert.assertEquals("Christian", record.get(TEST.VALUE).get("name").get("first").asText());
   }
@@ -139,6 +138,6 @@ public class MCVETest {
    * @return A new {@code Field<JsonNode>} with the updated key-value pair
    */
   public static Field<JsonNode> setByKey(final Field<JsonNode> field, final String key, final JsonNode value) {
-    return DSL.field("jsonb_set({0}, {1}, {2})", JsonNode.class, field, DSL.array(key), value);
+    return DSL.field("jsonb_set({0}, {1}, {2})", JsonNode.class, field, DSL.array(key), DSL.val(value, JSON_TYPE));
   }
 }
